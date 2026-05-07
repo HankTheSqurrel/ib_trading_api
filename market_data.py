@@ -226,7 +226,7 @@ def get_delayed_quote(symbol: str) -> Dict[str, Any]:
     for sym in symbols_to_try:
         try:
             ticker = yf.Ticker(sym)
-            data = ticker.history(period="5d", interval="1h")  # Use longer period/hours for reliability
+            data = ticker.history(period="5d", interval="5m")  # 5 days, 5-minute bars
             if data is not None and not data.empty:
                 yahoo_symbol = sym
                 break
