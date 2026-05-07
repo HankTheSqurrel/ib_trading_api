@@ -8,22 +8,38 @@ try:
 except ImportError:
     yf = None  # Will be handled at runtime
 
-def get_realtime_quote(ib: IB, contract: Contract, timeout: float = 5.0) -> Dict[str, Any]:
+def get_realtime_quote(ib: IB, contract: Contract, timeout: float = 15.0) -> Dict[str, Any]:
     """
     Get real-time quote for a contract.
     
     Args:
         ib: IB instance
         contract: Contract to quote
-        timeout: Wait timeout in seconds
+        timeout: Wait timeout in seconds (default 15s for futures)
     
     Returns:
         Dict with bid, ask, last, high, low, volume, etc.
+        Note: May return delayed data if no market data subscription.
     """
+    import time
+    
+    # Qualify contract first
+    qualified = ib.qualifyContracts(contract)
+    if qualified:
+        contract = qualified[0]
+    
+    # Request market data (generic tickers for futures)
     ticker = ib.reqMktData(contract, "", False, False)
     
-    # Wait for data
-    ib.waitOnTimeout(timeout)
+    # Wait for data with polling (futures take longer)
+    start = time.time()
+    while time.time() - start < timeout:
+        if ticker.bid is not None and ticker.bid > 0:
+            break
+        time.sleep(0.2)
+    
+    # Check if data is delayed
+    is_delayed = hasattr(ticker, 'delayed') and ticker.delayed
     
     return {
         "bid": ticker.bid,
@@ -36,7 +52,8 @@ def get_realtime_quote(ib: IB, contract: Contract, timeout: float = 5.0) -> Dict
         "bid_size": ticker.bidSize,
         "ask_size": ticker.askSize,
         "last_size": ticker.lastSize,
-        "model_greeks": ticker.modelGreeks if hasattr(ticker, 'modelGreeks') else None
+        "model_greeks": ticker.modelGreeks if hasattr(ticker, 'modelGreeks') else None,
+        "delayed": is_delayed
     }
 
 def get_historical_data(
