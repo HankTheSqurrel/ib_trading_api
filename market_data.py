@@ -81,8 +81,8 @@ def get_historical_data(
     bars = ib.reqHistoricalData(
         contract,
         "",
-        duration=duration,
-        barSize=bar_size,
+        durationStr=duration,
+        barSizeSetting=bar_size,
         whatToShow=what_to_show,
         useRTH=use_rth,
         formatDate=1
