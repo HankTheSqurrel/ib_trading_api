@@ -155,6 +155,14 @@ def get_contract_details(ib: IB, contract: Contract) -> Optional[Dict[str, Any]]
 
 def get_delayed_quote(symbol: str) -> Dict[str, Any]:
     """Fetch delayed quote data for a ticker symbol using Yahoo Finance.
+    
+    Note: Futures require special Yahoo ticker format:
+    - MES (Micro E-mini S&P 500) = "MES=F"
+    - MNQ (Micro E-mini NASDAQ 100) = "MNQ=F"
+    - MYM (Micro Dow) = "MYM=F"
+    - M6M (Micro E-mini EUR/USD) = "M6M=F"
+    
+    For stocks: use symbol directly (e.g., "AAPL", "MSFT")
 
     This uses the `yfinance` library which provides delayed (typically ~15‑minute)
     market data for free. The function returns a dictionary compatible with the
