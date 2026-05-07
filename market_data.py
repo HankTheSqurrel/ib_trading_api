@@ -171,13 +171,23 @@ def get_contract_details(ib: IB, contract: Contract) -> Optional[Dict[str, Any]]
 # -------------------------------------------------
 
 # Yahoo Finance ticker mapping for futures
+# Note: yfinance may need different ticker formats
 YAHOO_FUTURE_TICKERS = {
-    "MES": "MES=F",   # Micro E-mini S&P 500
+    "MES": "MES=F",   # Micro E-mini S&P 500 (front month)
     "MNQ": "MNQ=F",   # Micro E-mini NASDAQ 100
     "MYM": "MYM=F",   # Micro Dow Jones
     "M6M": "M6M=F",   # Micro E-mini EUR/USD
-    "MESF": "MES=F",
-    "MNQF": "MNQ=F",
+    "ES": "ES=F",     # E-mini S&P 500
+    "NQ": "NQ=F",     # E-mini NASDAQ 100
+    "YM": "YM=F",     # E-mini Dow
+}
+
+# Alternative ticker formats to try if first fails
+YAHOO_FUTURE_ALTERNATIVES = {
+    "MES": ["MES=F", "MES1!", "MES.F"],
+    "MNQ": ["MNQ=F", "MNQ1!", "MNQ.F"],
+    "MYM": ["MYM=F", "MYM1!", "MYM.F"],
+    "ES": ["ES=F", "ES1!", "ES.F"],
 }
 
 def get_delayed_quote(symbol: str) -> Dict[str, Any]:
@@ -208,24 +218,37 @@ def get_delayed_quote(symbol: str) -> Dict[str, Any]:
     # Convert futures symbol to Yahoo format
     yahoo_symbol = YAHOO_FUTURE_TICKERS.get(symbol.upper(), symbol)
     
-    try:
-        ticker = yf.Ticker(yahoo_symbol)
-        data = ticker.history(period="1d", interval="1m")
-        if data.empty:
-            return {}
-        latest = data.iloc[-1]
-        return {
-            "symbol": symbol,
-            "bid": latest.get('Close'),
-            "ask": latest.get('Close'),
-            "last": latest.get('Close'),
-            "high": latest.get('High'),
-            "low": latest.get('Low'),
-            "volume": latest.get('Volume'),
-            "timestamp": latest.name.isoformat() if hasattr(latest.name, 'isoformat') else str(latest.name),
-        }
-    except Exception:
-        return {}
+    # Try multiple ticker formats for futures
+    symbols_to_try = YAHOO_FUTURE_ALTERNATIVES.get(symbol.upper(), [yahoo_symbol])
+    
+    data = None
+    last_error = None
+    for sym in symbols_to_try:
+        try:
+            ticker = yf.Ticker(sym)
+            data = ticker.history(period="5d", interval="1h")  # Use longer period/hours for reliability
+            if data is not None and not data.empty:
+                yahoo_symbol = sym
+                break
+        except Exception as e:
+            last_error = str(e)
+            continue
+    
+    if data is None or data.empty:
+        raise ValueError(f"No data found for {symbol} (tried: {symbols_to_try})")
+    
+    # Get latest bar
+    latest = data.iloc[-1]
+    return {
+        "symbol": yahoo_symbol,
+        "bid": float(latest.get('Close')),
+        "ask": float(latest.get('Close')),
+        "last": float(latest.get('Close')),
+        "high": float(latest.get('High')) if pd.notna(latest.get('High')) else None,
+        "low": float(latest.get('Low')) if pd.notna(latest.get('Low')) else None,
+        "volume": int(latest.get('Volume')) if pd.notna(latest.get('Volume')) else 0,
+        "timestamp": latest.name.isoformat() if hasattr(latest.name, 'isoformat') else str(latest.name),
+    }
 
 def get_quote(symbol: str, source: str = "yahoo", ib: Optional[IB] = None, contract: Optional[Contract] = None, timeout: float = 5.0) -> Dict[str, Any]:
     """Unified quote getter supporting delayed Yahoo data and IB realtime.
