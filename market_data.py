@@ -171,6 +171,42 @@ def get_contract_details(ib: IB, contract: Contract) -> Optional[Dict[str, Any]]
 # -------------------------------------------------
 
 # Yahoo Finance ticker mapping for futures
+
+def get_yahoo_historical(symbol: str,
+                         period: str = "5d",
+                         interval: str = "5m") -> pd.DataFrame:
+    """Fetch a multi‑row historical series from Yahoo Finance.
+    
+    Args:
+        symbol: Ticker symbol (e.g., "MES=F" or any stock symbol).
+        period: How far back to fetch (e.g., "5d", "1mo", "1y").
+        interval: Bar size – Yahoo supports "1m", "2m", "5m", "15m", "30m",
+                  "60m", "90m", "1h", "1d", etc.
+    
+    Returns:
+        DataFrame with columns: date, open, high, low, close, volume.
+        If no data is found, returns an empty DataFrame.
+    """
+    if yf is None:
+        raise ImportError("yfinance is required for Yahoo historical data")
+    # Convert futures symbols to Yahoo format automatically
+    yahoo_sym = YAHOO_FUTURE_TICKERS.get(symbol.upper(), symbol)
+    ticker = yf.Ticker(yahoo_sym)
+    df = ticker.history(period=period, interval=interval)
+    if df.empty:
+        return pd.DataFrame()
+    # Reset index to get a ‘date’ column and rename columns to match IB output
+    df = df.reset_index().rename(columns={
+        "Date": "date",
+        "Open": "open",
+        "High": "high",
+        "Low": "low",
+        "Close": "close",
+        "Volume": "volume"
+    })
+    return df[["date", "open", "high", "low", "close", "volume"]]
+
+# Yahoo Finance ticker mapping for futures
 # Note: yfinance may need different ticker formats
 YAHOO_FUTURE_TICKERS = {
     "MES": "MES=F",   # Micro E-mini S&P 500 (front month)
@@ -191,6 +227,24 @@ YAHOO_FUTURE_ALTERNATIVES = {
 }
 
 def get_delayed_quote(symbol: str) -> Dict[str, Any]:
+    """Legacy wrapper – returns only the latest bar (used by older code)."""
+    # This function is kept for backward compatibility; it simply returns the most recent
+    # delayed quote from Yahoo Finance.  For full historical series see `get_yahoo_historical`.
+    # The implementation below delegates to `get_yahoo_historical` and picks the last row.
+    df = get_yahoo_historical(symbol, period="5d", interval="5m")
+    if df.empty:
+        raise ValueError(f"No data found for {symbol} via Yahoo Finance")
+    latest = df.iloc[-1]
+    return {
+        "symbol": symbol,
+        "bid": float(latest.get('close')),
+        "ask": float(latest.get('close')),
+        "last": float(latest.get('close')),
+        "high": float(latest.get('high')) if pd.notna(latest.get('high')) else None,
+        "low": float(latest.get('low')) if pd.notna(latest.get('low')) else None,
+        "volume": int(latest.get('volume')) if pd.notna(latest.get('volume')) else 0,
+        "timestamp": str(latest.get('date')),
+    }
     """Fetch delayed quote data for a ticker symbol using Yahoo Finance.
     
     Automatically converts futures symbols to Yahoo format:
