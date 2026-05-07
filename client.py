@@ -113,7 +113,8 @@ class IBClient:
         if sec_type == "STK":
             contract = Stock(symbol, exchange, currency)
         elif sec_type == "FUT":
-            contract = Future(symbol, exchange, currency, expiry)
+            # Correct Future signature: Future(symbol, expiry, exchange, currency)
+            contract = Future(symbol, expiry, exchange, currency)
         elif sec_type == "OPT":
             contract = Option(symbol, expiry, strike, right, exchange, currency)
         elif sec_type == "FOREX":
