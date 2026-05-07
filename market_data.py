@@ -170,14 +170,24 @@ def get_contract_details(ib: IB, contract: Contract) -> Optional[Dict[str, Any]]
 # Delayed data (Yahoo Finance) API
 # -------------------------------------------------
 
+# Yahoo Finance ticker mapping for futures
+YAHOO_FUTURE_TICKERS = {
+    "MES": "MES=F",   # Micro E-mini S&P 500
+    "MNQ": "MNQ=F",   # Micro E-mini NASDAQ 100
+    "MYM": "MYM=F",   # Micro Dow Jones
+    "M6M": "M6M=F",   # Micro E-mini EUR/USD
+    "MESF": "MES=F",
+    "MNQF": "MNQ=F",
+}
+
 def get_delayed_quote(symbol: str) -> Dict[str, Any]:
     """Fetch delayed quote data for a ticker symbol using Yahoo Finance.
     
-    Note: Futures require special Yahoo ticker format:
-    - MES (Micro E-mini S&P 500) = "MES=F"
-    - MNQ (Micro E-mini NASDAQ 100) = "MNQ=F"
-    - MYM (Micro Dow) = "MYM=F"
-    - M6M (Micro E-mini EUR/USD) = "M6M=F"
+    Automatically converts futures symbols to Yahoo format:
+    - MES -> MES=F
+    - MNQ -> MNQ=F
+    - MYM -> MYM=F
+    - M6M -> M6M=F
     
     For stocks: use symbol directly (e.g., "AAPL", "MSFT")
 
@@ -186,7 +196,7 @@ def get_delayed_quote(symbol: str) -> Dict[str, Any]:
     format of `get_realtime_quote` so callers can treat both sources uniformly.
 
     Args:
-        symbol: Stock ticker symbol (e.g., "AAPL", "MSFT").
+        symbol: Stock ticker symbol (e.g., "AAPL", "MSFT") or futures (e.g., "MES").
 
     Returns:
         Dict with keys: bid, ask, last, high, low, volume, and timestamp.
@@ -194,8 +204,12 @@ def get_delayed_quote(symbol: str) -> Dict[str, Any]:
     """
     if yf is None:
         raise ImportError("yfinance package is required for delayed Yahoo data. Install it via requirements.txt.")
+    
+    # Convert futures symbol to Yahoo format
+    yahoo_symbol = YAHOO_FUTURE_TICKERS.get(symbol.upper(), symbol)
+    
     try:
-        ticker = yf.Ticker(symbol)
+        ticker = yf.Ticker(yahoo_symbol)
         data = ticker.history(period="1d", interval="1m")
         if data.empty:
             return {}
