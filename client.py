@@ -114,7 +114,9 @@ class IBClient:
             contract = Stock(symbol, exchange, currency)
         elif sec_type == "FUT":
             # Correct Future signature: Future(symbol, expiry, exchange, currency)
-            contract = Future(symbol, expiry, exchange, currency)
+            # If expiry is None or empty, pass an empty string so IB can resolve the nearest contract.
+            exp = expiry if expiry else ""
+            contract = Future(symbol, exp, exchange, currency)
         elif sec_type == "OPT":
             contract = Option(symbol, expiry, strike, right, exchange, currency)
         elif sec_type == "FOREX":
