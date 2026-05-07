@@ -37,7 +37,7 @@ def fetch_and_analyze():
         # Build contract
         if sec_type.upper() == "FUT":
             # For futures, let IB pick the nearest contract if an expiry is not provided
-        contract = client.create_contract(symbol, "FUT", exchange, "USD", expiry if expiry else None)
+            contract = client.create_contract(symbol, "FUT", exchange, "USD", expiry if expiry else None)
         else:
             contract = client.create_contract(symbol, sec_type.upper(), exchange)
         
