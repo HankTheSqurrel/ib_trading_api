@@ -6,7 +6,7 @@ from ib_insync import IB, Stock, Future, Option, Forex, Contract
 class IBConfig:
     """Configuration for IB connection"""
     host: str = "127.0.0.1"
-    port: int = 4001  # 4001 for Gateway, 7496 for TWS
+    port: int = 7497  # 7497 for TWS paper (paper trading)
     client_id: int = 1
 
 class IBClient:
