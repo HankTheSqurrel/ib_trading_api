@@ -552,9 +552,13 @@ def update_chart(prev_df, prev_store):
         return
     
     try:
-        # Save current zoom/pan limits from study chart
+        # Save current zoom/pan limits from study chart (if any)
         xlim = study_ax.get_xlim()
         ylim = study_ax.get_ylim()
+        
+        # Check if limits are valid (not default/autoscale)
+        xlim_valid = xlim[0] != xlim[1] and xlim[0] != 0 and xlim[1] != 1
+        ylim_valid = ylim[0] != ylim[1] and ylim[0] != 1 and ylim[1] != 0
         
         # Re-fetch historical data to get latest bar
         df = get_historical_data(live_client.ib, live_contract, duration="5 D", bar_size="5 mins")
@@ -595,12 +599,20 @@ def update_chart(prev_df, prev_store):
         # Redraw fib chart
         draw_fib_chart(fib_ax, df, swing_highs, swing_lows, fibs_ext)
         
-        # Restore zoom/pan limits
-        study_ax.set_xlim(xlim)
-        study_ax.set_ylim(ylim)
+        # Restore zoom/pan limits only if they were valid before
+        if xlim_valid:
+            study_ax.set_xlim(xlim)
+        if ylim_valid:
+            study_ax.set_ylim(ylim)
         
         study_canvas.draw()
         fib_canvas.draw()
+        
+        # Apply limits again after draw to ensure they stick
+        if xlim_valid:
+            study_ax.set_xlim(xlim)
+        if ylim_valid:
+            study_ax.set_ylim(ylim)
         
         schedule_update(df, store)
         
