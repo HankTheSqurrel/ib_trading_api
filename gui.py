@@ -145,8 +145,9 @@ def create_live_chart(df, store):
     study_frame = ttk.Frame(study_tab)
     study_frame.pack(fill=tk.BOTH, expand=True)
     
-    study_fig = Figure(figsize=(16, 6), dpi=100)
+    study_fig = Figure(figsize=(16, 6), dpi=100, facecolor=DARK_BG)
     study_ax = study_fig.add_subplot(111)
+    study_ax.set_facecolor("#1a1a1a")
     
     # Get analysis data
     swing_highs = store.find_swing_highs()
@@ -179,8 +180,9 @@ def create_live_chart(df, store):
     fib_frame = ttk.Frame(fib_tab)
     fib_frame.pack(fill=tk.BOTH, expand=True)
     
-    fib_fig = Figure(figsize=(16, 6), dpi=100)
+    fib_fig = Figure(figsize=(16, 6), dpi=100, facecolor=DARK_BG)
     fib_ax = fib_fig.add_subplot(111)
+    fib_ax.set_facecolor("#1a1a1a")
     
     # Draw fib chart
     draw_fib_chart(fib_ax, df, swing_highs, swing_lows, fibs_ext)
@@ -201,6 +203,14 @@ def draw_fib_chart(ax, df, swing_highs=None, swing_lows=None, fibs_ext=None):
     import pandas as pd
     
     ax.clear()
+    ax.tick_params(colors=DARK_FG)
+    ax.xaxis.label.set_color(DARK_FG)
+    ax.yaxis.label.set_color(DARK_FG)
+    ax.spines['bottom'].set_color(DARK_FG)
+    ax.spines['top'].set_color(DARK_FG)
+    ax.spines['left'].set_color(DARK_FG)
+    ax.spines['right'].set_color(DARK_FG)
+    
     dates = pd.to_datetime(df['date'])
     
     # Plot candles (simpler - just wicks and bodies)
@@ -279,6 +289,14 @@ def draw_candles(ax, df, swing_highs=None, swing_lows=None, liquidity=None, open
     import pandas as pd
     
     ax.clear()
+    ax.tick_params(colors=DARK_FG)
+    ax.xaxis.label.set_color(DARK_FG)
+    ax.yaxis.label.set_color(DARK_FG)
+    ax.spines['bottom'].set_color(DARK_FG)
+    ax.spines['top'].set_color(DARK_FG)
+    ax.spines['left'].set_color(DARK_FG)
+    ax.spines['right'].set_color(DARK_FG)
+    
     dates = pd.to_datetime(df['date'])
     
     for i, row in df.iterrows():
@@ -665,6 +683,30 @@ root = tk.Tk()
 root.title("IB Trading API - ICT Analyzer (Live)")
 root.geometry("1000x700")
 
+# Dark mode colors
+DARK_BG = "#1e1e1e"
+DARK_FG = "#ffffff"
+DARK_ENTRY_BG = "#2d2d2d"
+DARK_ENTRY_FG = "#ffffff"
+DARK_BUTTON_BG = "#3c3c3c"
+
+# Configure dark mode for root
+root.configure(bg=DARK_BG)
+
+# Configure ttk style for dark mode
+style = ttk.Style()
+style.theme_use('clam')
+style.configure("TFrame", background=DARK_BG)
+style.configure("TLabel", background=DARK_BG, foreground=DARK_FG)
+style.configure("TButton", background=DARK_BUTTON_BG, foreground=DARK_FG, borderwidth=1)
+style.map("TButton", background=[("active", DARK_BUTTON_BG)])
+
+# Configure Notebook for dark mode
+style.configure("TNotebook", background=DARK_BG)
+style.configure("TNotebook.Tab", background="#2d2d2d", foreground=DARK_FG, padding=[10, 5])
+style.map("TNotebook.Tab", background=[("selected", DARK_BG)], foreground=[("selected", "#00ff00")])
+
+
 # Top frame for symbol input
 top_frame = ttk.Frame(root, padding="5")
 top_frame.pack(fill=tk.X)
@@ -672,7 +714,10 @@ top_frame.pack(fill=tk.X)
 symbol_var = tk.StringVar(value=load_defaults())
 
 ttk.Label(top_frame, text="Symbol:").pack(side=tk.LEFT, padx=5)
-ttk.Entry(top_frame, width=12, textvariable=symbol_var).pack(side=tk.LEFT, padx=5)
+symbol_entry = ttk.Entry(top_frame, width=12, textvariable=symbol_var)
+symbol_entry.pack(side=tk.LEFT, padx=5)
+symbol_entry.configure(fieldbackground=DARK_ENTRY_BG, foreground=DARK_ENTRY_FG)
+
 ttk.Button(top_frame, text="Fetch & Analyze (Live)", command=fetch_and_analyze).pack(side=tk.LEFT, padx=5)
 ttk.Button(top_frame, text="Save Defaults", command=save_defaults).pack(side=tk.LEFT, padx=5)
 
@@ -684,7 +729,7 @@ notebook.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 info_tab = ttk.Frame(notebook)
 notebook.add(info_tab, text="Info")
 
-output = scrolledtext.ScrolledText(info_tab, wrap=tk.WORD)
+output = scrolledtext.ScrolledText(info_tab, wrap=tk.WORD, bg=DARK_BG, fg=DARK_FG, insertbackground=DARK_FG)
 output.pack(fill=tk.BOTH, expand=True)
 
 # Study Chart tab (main candlestick chart with ICT analysis)
@@ -692,14 +737,18 @@ study_tab = ttk.Frame(notebook)
 notebook.add(study_tab, text="Study Chart")
 
 # Placeholder text in study tab
-ttk.Label(study_tab, text="Click Fetch to load chart", font=("Arial", 14)).pack(expand=True)
+study_placeholder = ttk.Label(study_tab, text="Click Fetch to load chart", font=("Arial", 14))
+study_placeholder.pack(expand=True)
+study_placeholder.configure(background=DARK_BG, foreground=DARK_FG)
 
 # Fib Chart tab (Fibonacci extension chart)
 fib_tab = ttk.Frame(notebook)
 notebook.add(fib_tab, text="Fib Chart")
 
 # Placeholder text in fib tab
-ttk.Label(fib_tab, text="Click Fetch to load chart", font=("Arial", 14)).pack(expand=True)
+fib_placeholder = ttk.Label(fib_tab, text="Click Fetch to load chart", font=("Arial", 14))
+fib_placeholder.pack(expand=True)
+fib_placeholder.configure(background=DARK_BG, foreground=DARK_FG)
 
 # Bottom frame for close button
 bottom_frame = ttk.Frame(root, padding="5")
