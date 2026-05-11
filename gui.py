@@ -714,9 +714,9 @@ top_frame.pack(fill=tk.X)
 symbol_var = tk.StringVar(value=load_defaults())
 
 ttk.Label(top_frame, text="Symbol:").pack(side=tk.LEFT, padx=5)
-symbol_entry = ttk.Entry(top_frame, width=12, textvariable=symbol_var)
+# Use standard tk.Entry for color support
+symbol_entry = tk.Entry(top_frame, width=12, textvariable=symbol_var, bg=DARK_ENTRY_BG, fg=DARK_ENTRY_FG, insertbackground=DARK_FG)
 symbol_entry.pack(side=tk.LEFT, padx=5)
-symbol_entry.configure(fieldbackground=DARK_ENTRY_BG, foreground=DARK_ENTRY_FG)
 
 ttk.Button(top_frame, text="Fetch & Analyze (Live)", command=fetch_and_analyze).pack(side=tk.LEFT, padx=5)
 ttk.Button(top_frame, text="Save Defaults", command=save_defaults).pack(side=tk.LEFT, padx=5)
