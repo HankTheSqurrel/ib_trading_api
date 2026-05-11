@@ -279,8 +279,15 @@ def draw_fib_chart(ax, df, swing_highs=None, swing_lows=None, fibs_ext=None):
             ax.hlines(y=price, xmin=dates.iloc[0], xmax=dates.iloc[-1], colors=color,
                      linestyles=ls, linewidth=lw, alpha=0.8)
             
+            # Convert to percentage for display
+            try:
+                pct = float(level_name) * 100
+                label = f"{pct:.1f}%" if pct >= 0 else f"{pct:.1f}%"
+            except:
+                label = level_name
+            
             # Add label on right
-            ax.annotate(f'{level_name}', xy=(dates.iloc[-1], price), xytext=(5, 0),
+            ax.annotate(label, xy=(dates.iloc[-1], price), xytext=(5, 0),
                        textcoords='offset points', fontsize=7, color=color,
                        ha='left', va='center', alpha=0.9)
 
