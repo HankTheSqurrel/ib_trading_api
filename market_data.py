@@ -11,36 +11,36 @@ except ImportError:
 def get_realtime_quote(ib: IB, contract: Contract, timeout: float = 15.0) -> Dict[str, Any]:
     """
     Get real-time quote for a contract.
-    
+
     Args:
         ib: IB instance
         contract: Contract to quote
         timeout: Wait timeout in seconds (default 15s for futures)
-    
+
     Returns:
         Dict with bid, ask, last, high, low, volume, etc.
         Note: May return delayed data if no market data subscription.
     """
     import time
-    
+
     # Qualify contract first
     qualified = ib.qualifyContracts(contract)
     if qualified:
         contract = qualified[0]
-    
+
     # Request market data (generic tickers for futures)
     ticker = ib.reqMktData(contract, "", False, False)
-    
+
     # Wait for data with polling (futures take longer)
     start = time.time()
     while time.time() - start < timeout:
         if ticker.bid is not None and ticker.bid > 0:
             break
         time.sleep(0.2)
-    
+
     # Check if data is delayed
     is_delayed = hasattr(ticker, 'delayed') and ticker.delayed
-    
+
     return {
         "bid": ticker.bid,
         "ask": ticker.ask,
@@ -66,7 +66,7 @@ def get_historical_data(
 ) -> pd.DataFrame:
     """
     Get historical data for a contract.
-    
+
     Args:
         ib: IB instance
         contract: Contract to get data for
@@ -74,7 +74,7 @@ def get_historical_data(
         bar_size: Bar size (e.g., "1 min", "5 mins", "1 hour")
         what_to_show: What data to show (TRADES, BID, ASK, MIDPOINT, etc.)
         use_rth: Use regular trading hours only
-    
+
     Returns:
         DataFrame with OHLCV data
     """
@@ -87,10 +87,10 @@ def get_historical_data(
         useRTH=use_rth,
         formatDate=1
     )
-    
+
     if bars is None or len(bars) == 0:
         return pd.DataFrame()
-    
+
     return pd.DataFrame([{
         "date": bar.date,
         "open": bar.open,
@@ -105,20 +105,20 @@ def get_historical_data(
 def subscribe_quote(ib: IB, contract: Contract, callback=None):
     """
     Subscribe to real-time quotes.
-    
+
     Args:
         ib: IB instance
         contract: Contract to subscribe to
         callback: Optional callback function(ticker)
-    
+
     Returns:
         Ticker object
     """
     ticker = ib.reqMktData(contract, "", False, False)
-    
+
     if callback:
         ticker.updateEvent += callback
-    
+
     return ticker
 
 def unsubscribe_quote(ib: IB, ticker: Ticker):
@@ -128,19 +128,19 @@ def unsubscribe_quote(ib: IB, ticker: Ticker):
 def get_contract_details(ib: IB, contract: Contract) -> Optional[Dict[str, Any]]:
     """
     Get contract details.
-    
+
     Args:
         ib: IB instance
         contract: Contract to get details for
-    
+
     Returns:
         Dict with contract details
     """
     details = ib.reqContractDetails(contract)
-    
+
     if not details:
         return None
-    
+
     d = details[0]
     return {
         "symbol": d.contract.symbol,
@@ -175,14 +175,14 @@ def get_contract_details(ib: IB, contract: Contract) -> Optional[Dict[str, Any]]
 def get_yahoo_historical(symbol: str,
                          period: str = "5d",
                          interval: str = "5m") -> pd.DataFrame:
-    """Fetch a multi‑row historical series from Yahoo Finance.
-    
+    """Fetch a multi-row historical series from Yahoo Finance.
+
     Args:
         symbol: Ticker symbol (e.g., "MES=F" or any stock symbol).
         period: How far back to fetch (e.g., "5d", "1mo", "1y").
-        interval: Bar size – Yahoo supports "1m", "2m", "5m", "15m", "30m",
+        interval: Bar size - Yahoo supports "1m", "2m", "5m", "15m", "30m",
                   "60m", "90m", "1h", "1d", etc.
-    
+
     Returns:
         DataFrame with columns: date, open, high, low, close, volume.
         If no data is found, returns an empty DataFrame.
@@ -195,16 +195,27 @@ def get_yahoo_historical(symbol: str,
     df = ticker.history(period=period, interval=interval)
     if df.empty:
         return pd.DataFrame()
-    # Reset index to get a ‘date’ column and rename columns to match IB output
-    df = df.reset_index().rename(columns={
-        "Date": "date",
-        "Open": "open",
-        "High": "high",
-        "Low": "low",
-        "Close": "close",
-        "Volume": "volume"
-    })
-    return df[["date", "open", "high", "low", "close", "volume"]]
+    # yfinance returns DataFrame with datetime index and columns: Open, High, Low, Close, Volume
+    df = df.reset_index()
+    # Just lowercase the columns directly
+    df.columns = [c.lower() for c in df.columns]
+    # Map to expected names
+    col_rename = {
+        "datetime": "date",
+        "date": "date",
+        "open": "open",
+        "high": "high",
+        "low": "low",
+        "close": "close",
+        "volume": "volume"
+    }
+    df = df.rename(columns=col_rename)
+    # Keep only required columns that exist
+    wanted = ["date", "open", "high", "low", "close", "volume"]
+    existing = [c for c in wanted if c in df.columns]
+    if not existing:
+        return pd.DataFrame()
+    return df[existing]
 
 # Yahoo Finance ticker mapping for futures
 # Note: yfinance may need different ticker formats
@@ -227,35 +238,17 @@ YAHOO_FUTURE_ALTERNATIVES = {
 }
 
 def get_delayed_quote(symbol: str) -> Dict[str, Any]:
-    """Legacy wrapper – returns only the latest bar (used by older code)."""
-    # This function is kept for backward compatibility; it simply returns the most recent
-    # delayed quote from Yahoo Finance.  For full historical series see `get_yahoo_historical`.
-    # The implementation below delegates to `get_yahoo_historical` and picks the last row.
-    df = get_yahoo_historical(symbol, period="5d", interval="5m")
-    if df.empty:
-        raise ValueError(f"No data found for {symbol} via Yahoo Finance")
-    latest = df.iloc[-1]
-    return {
-        "symbol": symbol,
-        "bid": float(latest.get('close')),
-        "ask": float(latest.get('close')),
-        "last": float(latest.get('close')),
-        "high": float(latest.get('high')) if pd.notna(latest.get('high')) else None,
-        "low": float(latest.get('low')) if pd.notna(latest.get('low')) else None,
-        "volume": int(latest.get('volume')) if pd.notna(latest.get('volume')) else 0,
-        "timestamp": str(latest.get('date')),
-    }
     """Fetch delayed quote data for a ticker symbol using Yahoo Finance.
-    
+
     Automatically converts futures symbols to Yahoo format:
     - MES -> MES=F
     - MNQ -> MNQ=F
     - MYM -> MYM=F
     - M6M -> M6M=F
-    
+
     For stocks: use symbol directly (e.g., "AAPL", "MSFT")
 
-    This uses the `yfinance` library which provides delayed (typically ~15‑minute)
+    This uses the `yfinance` library which provides delayed (typically ~15-minute)
     market data for free. The function returns a dictionary compatible with the
     format of `get_realtime_quote` so callers can treat both sources uniformly.
 
@@ -268,13 +261,13 @@ def get_delayed_quote(symbol: str) -> Dict[str, Any]:
     """
     if yf is None:
         raise ImportError("yfinance package is required for delayed Yahoo data. Install it via requirements.txt.")
-    
+
     # Convert futures symbol to Yahoo format
     yahoo_symbol = YAHOO_FUTURE_TICKERS.get(symbol.upper(), symbol)
-    
+
     # Try multiple ticker formats for futures
     symbols_to_try = YAHOO_FUTURE_ALTERNATIVES.get(symbol.upper(), [yahoo_symbol])
-    
+
     data = None
     last_error = None
     for sym in symbols_to_try:
@@ -287,20 +280,21 @@ def get_delayed_quote(symbol: str) -> Dict[str, Any]:
         except Exception as e:
             last_error = str(e)
             continue
-    
+
     if data is None or data.empty:
         raise ValueError(f"No data found for {symbol} (tried: {symbols_to_try})")
-    
-    # Get latest bar
+
+    # Get latest bar - yfinance returns lowercase column names
     latest = data.iloc[-1]
+    close_val = latest.get('close')
     return {
         "symbol": yahoo_symbol,
-        "bid": float(latest.get('Close')),
-        "ask": float(latest.get('Close')),
-        "last": float(latest.get('Close')),
-        "high": float(latest.get('High')) if pd.notna(latest.get('High')) else None,
-        "low": float(latest.get('Low')) if pd.notna(latest.get('Low')) else None,
-        "volume": int(latest.get('Volume')) if pd.notna(latest.get('Volume')) else 0,
+        "bid": float(close_val) if pd.notna(close_val) else 0.0,
+        "ask": float(close_val) if pd.notna(close_val) else 0.0,
+        "last": float(close_val) if pd.notna(close_val) else 0.0,
+        "high": float(latest.get('high')) if pd.notna(latest.get('high')) else None,
+        "low": float(latest.get('low')) if pd.notna(latest.get('low')) else None,
+        "volume": int(latest.get('volume')) if pd.notna(latest.get('volume')) else 0,
         "timestamp": latest.name.isoformat() if hasattr(latest.name, 'isoformat') else str(latest.name),
     }
 
