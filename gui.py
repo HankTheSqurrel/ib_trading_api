@@ -230,7 +230,7 @@ def draw_fib_chart(ax, df, swing_highs=None, swing_lows=None, fibs_ext=None):
     label_color = 'green' if direction_label == 'UPTREND' else 'red'
     ax.set_title(f'{live_symbol} - Fibonacci Extension ({direction_label})', fontsize=12, color=label_color, fontweight='bold')
     ax.grid(True, alpha=0.3)
-    plot_fig.autofmt_xdate()
+    fib_fig.autofmt_xdate()
     
     # Plot extended Fibonacci levels
     if fibs_ext and len(dates) > 0:
