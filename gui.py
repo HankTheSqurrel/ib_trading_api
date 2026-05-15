@@ -15,6 +15,7 @@ from tkinter import ttk, scrolledtext, messagebox
 import matplotlib
 matplotlib.use('TkAgg')
 from matplotlib.figure import Figure
+import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk
 
 FigureCanvasTkagg = None
@@ -44,6 +45,9 @@ fib_fig = None
 fib_ax = None
 fib_canvas = None
 update_id = None
+
+# Display settings (initialized after root window is created)
+display_settings = {}
 
 
 def fetch_and_analyze():
@@ -95,6 +99,7 @@ def fetch_and_analyze():
 
         # Store globals for live updates
         live_client = client
+        live_client._last_df = df  # Store for settings changes
         live_symbol = symbol
         live_timeframe = timeframe
         live_contract = contract
@@ -135,11 +140,31 @@ def fetch_and_analyze():
 def create_live_chart(df, store):
     global study_frame, study_fig, study_ax, study_canvas, fib_frame, fib_fig, fib_ax, fib_canvas
     
+    # Close previous figures to prevent memory leaks and stale references
+    if study_fig:
+        try:
+            plt.close(study_fig)
+        except:
+            pass
+    if fib_fig:
+        try:
+            plt.close(fib_fig)
+        except:
+            pass
+    
     # Clear previous charts if exists
     for widget in study_tab.winfo_children():
         widget.destroy()
     for widget in fib_tab.winfo_children():
         widget.destroy()
+    
+    # Reset figure references
+    study_fig = None
+    study_ax = None
+    study_canvas = None
+    fib_fig = None
+    fib_ax = None
+    fib_canvas = None
     
     # --- Study Chart (main candlestick chart with ICT analysis) ---
     study_frame = ttk.Frame(study_tab)
@@ -242,8 +267,8 @@ def draw_fib_chart(ax, df, swing_highs=None, swing_lows=None, fibs_ext=None):
     ax.grid(True, alpha=0.3)
     fib_fig.autofmt_xdate()
     
-    # Plot extended Fibonacci levels
-    if fibs_ext and len(dates) > 0:
+    # Plot extended Fibonacci levels - only if enabled
+    if fibs_ext and len(dates) > 0 and display_settings['show_fib_ext'].get():
         fib_levels = fibs_ext.get('levels', {})
         
         fib_colors = {
@@ -306,6 +331,7 @@ def draw_candles(ax, df, swing_highs=None, swing_lows=None, liquidity=None, open
     
     dates = pd.to_datetime(df['date'])
     
+    # Always show candles
     for i, row in df.iterrows():
         date = dates.iloc[i]
         open_price = row['open']
@@ -322,7 +348,7 @@ def draw_candles(ax, df, swing_highs=None, swing_lows=None, liquidity=None, open
             ax.plot([date, date], [low, high], color=color, linewidth=0.5)
             ax.plot([date, date], [open_price, close_price], color=color, linewidth=2)
     
-    if swing_highs:
+    if display_settings['show_swing_highs'].get() and swing_highs:
         for sh in swing_highs:
             try:
                 date = pd.to_datetime(sh['timestamp'])
@@ -333,7 +359,7 @@ def draw_candles(ax, df, swing_highs=None, swing_lows=None, liquidity=None, open
             except:
                 pass
     
-    if swing_lows:
+    if display_settings['show_swing_lows'].get() and swing_lows:
         for sl in swing_lows:
             try:
                 date = pd.to_datetime(sl['timestamp'])
@@ -344,7 +370,7 @@ def draw_candles(ax, df, swing_highs=None, swing_lows=None, liquidity=None, open
             except:
                 pass
     
-    # Plot support and resistance levels
+    # Plot support and resistance levels (only if enabled)
     if liquidity:
         # Get date range for horizontal lines
         if len(dates) > 0:
@@ -356,18 +382,20 @@ def draw_candles(ax, df, swing_highs=None, swing_lows=None, liquidity=None, open
             min_date = min_date - date_range * 0.02
             max_date = max_date + date_range * 0.02
             
-            # Draw resistance levels (red dashed lines)
-            for price in liquidity.get('resistance', []):
-                ax.hlines(y=price, xmin=min_date, xmax=max_date, colors='red', 
-                         linestyles='--', linewidth=1, alpha=0.7)
+            # Draw resistance levels (red dashed lines) - only if enabled
+            if display_settings['show_resistance'].get():
+                for price in liquidity.get('resistance', []):
+                    ax.hlines(y=price, xmin=min_date, xmax=max_date, colors='red', 
+                             linestyles='--', linewidth=1, alpha=0.7)
             
-            # Draw support levels (green dashed lines)
-            for price in liquidity.get('support', []):
-                ax.hlines(y=price, xmin=min_date, xmax=max_date, colors='green', 
-                         linestyles='--', linewidth=1, alpha=0.7)
+            # Draw support levels (green dashed lines) - only if enabled
+            if display_settings['show_support'].get():
+                for price in liquidity.get('support', []):
+                    ax.hlines(y=price, xmin=min_date, xmax=max_date, colors='green', 
+                             linestyles='--', linewidth=1, alpha=0.7)
     
-    # Plot Opening Range (yellow shaded area)
-    if opening_range:
+    # Plot Opening Range (yellow shaded area) - only if enabled
+    if opening_range and display_settings['show_opening_range'].get():
         or_high = opening_range.get('high')
         or_low = opening_range.get('low')
         if or_high and or_low and len(dates) > 0:
@@ -377,8 +405,8 @@ def draw_candles(ax, df, swing_highs=None, swing_lows=None, liquidity=None, open
             ax.hlines(y=or_low, xmin=dates.iloc[0], xmax=dates.iloc[-1], colors='orange', 
                      linestyles='-', linewidth=1.5, label='OR Low')
     
-    # Plot Daily High/Low (purple lines)
-    if daily_high_low:
+    # Plot Daily High/Low (purple lines) - only if enabled
+    if daily_high_low and display_settings['show_daily_high_low'].get():
         dh = daily_high_low.get('high')
         dl = daily_high_low.get('low')
         if dh and dl and len(dates) > 0:
@@ -387,8 +415,8 @@ def draw_candles(ax, df, swing_highs=None, swing_lows=None, liquidity=None, open
             ax.hlines(y=dl, xmin=dates.iloc[0], xmax=dates.iloc[-1], colors='purple', 
                      linestyles='-', linewidth=2, label='Daily Low')
     
-    # Plot Inverse Fair Value Gaps (IFVG) - purple
-    if ifvgs and len(dates) > 0:
+    # Plot Inverse Fair Value Gaps (IFVG) - purple - only if enabled
+    if ifvgs and len(dates) > 0 and display_settings['show_ifvgs'].get():
         for fvg in ifvgs:
             fvg_type = fvg.get('type')
             top = fvg.get('top')
@@ -440,8 +468,8 @@ def draw_candles(ax, df, swing_highs=None, swing_lows=None, liquidity=None, open
                     ax.hlines(y=mid, xmin=dates.iloc[0], xmax=dates.iloc[-1], colors=color, 
                             linestyles='-', linewidth=1.5, alpha=0.9)
     
-    # Plot Pivot levels (blue)
-    if pivots and len(dates) > 0:
+    # Plot Unfilled FVGs (green/red) - only if enabled
+    if fvgs and len(dates) > 0 and display_settings['show_fvgs'].get():
         pivot_color = 'blue'
         # Main pivot - solid line
         if pivots.get('pivot'):
@@ -458,6 +486,22 @@ def draw_candles(ax, df, swing_highs=None, swing_lows=None, liquidity=None, open
                 ax.hlines(y=pivots[level], xmin=dates.iloc[0], xmax=dates.iloc[-1], colors='green', 
                          linestyles='--', linewidth=1, alpha=0.5)
     
+    # Plot Fibonacci retracements - only if enabled
+    if fibs and len(dates) > 0 and display_settings['show_fibs'].get():
+        fib_levels = fibs.get('levels', {})
+        fib_colors = {
+            '0.0': 'gray', '23.6': 'orange', '38.2': 'yellow', 
+            '50.0': 'white', '61.8': 'cyan', '78.6': 'magenta', '100.0': 'gray'
+        }
+        for level_name, price in fib_levels.items():
+            color = fib_colors.get(level_name, 'gray')
+            ax.hlines(y=price, xmin=dates.iloc[0], xmax=dates.iloc[-1], colors=color,
+                     linestyles='--', linewidth=1, alpha=0.6)
+            # Add label
+            ax.annotate(f'{level_name}%', xy=(dates.iloc[-1], price), xytext=(5, 0),
+                       textcoords='offset points', fontsize=6, color=color,
+                       ha='left', va='center')
+    
     # Add price labels on the right side
     if len(dates) > 0:
         right_edge = dates.iloc[-1]
@@ -472,7 +516,7 @@ def draw_candles(ax, df, swing_highs=None, swing_lows=None, liquidity=None, open
                        ha='left', va='center', alpha=0.8)
         
         # Pivot levels
-        if pivots:
+        if pivots and display_settings['show_pivots'].get():
             add_label(pivots.get('pivot'), 'P', 'blue')
             add_label(pivots.get('r1'), 'R1', 'red')
             add_label(pivots.get('r2'), 'R2', 'red')
@@ -505,37 +549,8 @@ def draw_candles(ax, df, swing_highs=None, swing_lows=None, liquidity=None, open
             for entry in entry_zone['all_entries'][:5]:
                 add_label(entry.get('level'), entry.get('type'), label_color)
     
-    # Plot Fibonacci retracement (ICT style)
-    if fibs and len(dates) > 0:
-        fib_levels = fibs.get('levels', {})
-        move_type = fibs.get('move_type', '')
-        
-        # Key ICT Fibonacci levels to plot
-        fib_colors = {
-            '0.0': 'gray',
-            '23.6': 'gray',
-            '38.2': 'cyan',  # Key ICT level
-            '50.0': 'gray',
-            '61.8': 'cyan',  # Key ICT level
-            '78.6': 'gray',
-            '100.0': 'gray'
-        }
-        
-        for level_name, price in fib_levels.items():
-            color = fib_colors.get(level_name, 'gray')
-            lw = 2.0 if level_name in ['38.2', '61.8'] else 0.8
-            style = '-' if level_name in ['38.2', '61.8'] else '--'
-            ax.hlines(y=price, xmin=dates.iloc[0], xmax=dates.iloc[-1], colors=color,
-                     linestyles=style, linewidth=lw, alpha=0.7)
-            
-            # Add label for key levels
-            if level_name in ['38.2', '61.8']:
-                ax.annotate(f'F{level_name}', xy=(dates.iloc[-1], price), xytext=(5, 0),
-                           textcoords='offset points', fontsize=7, color=color,
-                           ha='left', va='center', alpha=0.9)
-    
-    # Plot Entry Zone (current price + closest entry level)
-    if entry_zone and len(dates) > 0:
+    # Plot Entry Zone (current price + closest entry level) - only if enabled
+    if entry_zone and len(dates) > 0 and display_settings['show_entry_zone'].get():
         current_price = entry_zone.get('current_price')
         closest = entry_zone.get('closest_entry')
         
@@ -567,7 +582,13 @@ def draw_candles(ax, df, swing_highs=None, swing_lows=None, liquidity=None, open
 
 def schedule_update(prev_df, prev_store):
     global update_id
-    update_id = root.after(1000, lambda: update_chart(prev_df, prev_store))
+    # Only schedule update if a chart tab is currently selected
+    current_tab = notebook.select()
+    if current_tab in (study_tab, fib_tab):
+        update_id = root.after(1000, lambda: update_chart(prev_df, prev_store))
+    else:
+        # Still schedule but with longer delay to check again
+        update_id = root.after(2000, lambda: schedule_update(prev_df, prev_store))
 
 
 def update_chart(prev_df, prev_store):
@@ -690,6 +711,24 @@ root = tk.Tk()
 root.title("IB Trading API - ICT Analyzer (Live)")
 root.geometry("1000x700")
 
+# Initialize display settings after root window is created
+display_settings = {
+    # Study Chart
+    'show_swing_highs': tk.BooleanVar(value=True),
+    'show_swing_lows': tk.BooleanVar(value=True),
+    'show_resistance': tk.BooleanVar(value=True),
+    'show_support': tk.BooleanVar(value=True),
+    'show_opening_range': tk.BooleanVar(value=True),
+    'show_daily_high_low': tk.BooleanVar(value=True),
+    'show_ifvgs': tk.BooleanVar(value=True),
+    'show_fvgs': tk.BooleanVar(value=True),
+    'show_fibs': tk.BooleanVar(value=True),
+    'show_pivots': tk.BooleanVar(value=True),
+    'show_entry_zone': tk.BooleanVar(value=True),
+    # Fib Chart
+    'show_fib_ext': tk.BooleanVar(value=True),
+}
+
 # Dark mode colors
 DARK_BG = "#1e1e1e"
 DARK_FG = "#ffffff"
@@ -756,6 +795,92 @@ notebook.add(fib_tab, text="Fib Chart")
 fib_placeholder = ttk.Label(fib_tab, text="Click Fetch to load chart", font=("Arial", 14))
 fib_placeholder.pack(expand=True)
 fib_placeholder.configure(background=DARK_BG, foreground=DARK_FG)
+
+# Display Settings tab
+settings_tab = ttk.Frame(notebook)
+notebook.add(settings_tab, text="Display Settings")
+
+# Function to apply display settings
+def apply_display_settings():
+    """Apply display settings and redraw charts if they exist"""
+    global live_client, live_symbol, live_timeframe, live_contract
+    
+    if study_frame is None or not study_frame.winfo_exists():
+        return
+    
+    # Just redraw with existing data (no re-fetch needed for settings change)
+    try:
+        if live_client and live_contract and hasattr(live_client, '_last_df'):
+            df = live_client._last_df
+            if df is not None and not df.empty:
+                store = load_from_dataframe(df, symbol=live_symbol, timeframe=live_timeframe)
+                # Re-create the charts with new settings
+                create_live_chart(df, store)
+                root.update()
+    except Exception as e:
+        output.insert(tk.END, f"Settings apply error: {e}\n")
+
+# Create a frame for settings with scrollbar
+settings_canvas = tk.Canvas(settings_tab, bg=DARK_BG)
+settings_scrollbar = ttk.Scrollbar(settings_tab, orient="vertical", command=settings_canvas.yview)
+settings_scrollable_frame = ttk.Frame(settings_canvas)
+
+settings_scrollable_frame.bind(
+    "<Configure>",
+    lambda e: settings_canvas.configure(scrollregion=settings_canvas.bbox("all"))
+)
+
+settings_canvas.create_window((0, 0), window=settings_scrollable_frame, anchor="nw")
+settings_canvas.configure(yscrollcommand=settings_scrollbar.set)
+
+settings_canvas.pack(side="left", fill="both", expand=True)
+settings_scrollbar.pack(side="right", fill="y")
+
+# Study Chart settings
+study_settings_label = ttk.Label(settings_scrollable_frame, text="Study Chart", font=("Arial", 12, "bold"))
+study_settings_label.pack(anchor="w", pady=(10, 5), padx=5)
+
+ttk.Checkbutton(settings_scrollable_frame, text="Swing Highs", variable=display_settings['show_swing_highs'],
+                command=apply_display_settings).pack(anchor="w", padx=20)
+ttk.Checkbutton(settings_scrollable_frame, text="Swing Lows", variable=display_settings['show_swing_lows'],
+                command=apply_display_settings).pack(anchor="w", padx=20)
+ttk.Checkbutton(settings_scrollable_frame, text="Resistance Levels", variable=display_settings['show_resistance'],
+                command=apply_display_settings).pack(anchor="w", padx=20)
+ttk.Checkbutton(settings_scrollable_frame, text="Support Levels", variable=display_settings['show_support'],
+                command=apply_display_settings).pack(anchor="w", padx=20)
+ttk.Checkbutton(settings_scrollable_frame, text="Opening Range", variable=display_settings['show_opening_range'],
+                command=apply_display_settings).pack(anchor="w", padx=20)
+ttk.Checkbutton(settings_scrollable_frame, text="Daily High/Low", variable=display_settings['show_daily_high_low'],
+                command=apply_display_settings).pack(anchor="w", padx=20)
+ttk.Checkbutton(settings_scrollable_frame, text="Inverse FVGs", variable=display_settings['show_ifvgs'],
+                command=apply_display_settings).pack(anchor="w", padx=20)
+ttk.Checkbutton(settings_scrollable_frame, text="Unfilled FVGs", variable=display_settings['show_fvgs'],
+                command=apply_display_settings).pack(anchor="w", padx=20)
+ttk.Checkbutton(settings_scrollable_frame, text="Fibonacci Retracements", variable=display_settings['show_fibs'],
+                command=apply_display_settings).pack(anchor="w", padx=20)
+ttk.Checkbutton(settings_scrollable_frame, text="Pivot Levels", variable=display_settings['show_pivots'],
+                command=apply_display_settings).pack(anchor="w", padx=20)
+ttk.Checkbutton(settings_scrollable_frame, text="Entry Zone", variable=display_settings['show_entry_zone'],
+                command=apply_display_settings).pack(anchor="w", padx=20)
+
+# Fib Chart settings
+fib_settings_label = ttk.Label(settings_scrollable_frame, text="Fib Chart", font=("Arial", 12, "bold"))
+fib_settings_label.pack(anchor="w", pady=(20, 5), padx=5)
+
+ttk.Checkbutton(settings_scrollable_frame, text="Fibonacci Extension Levels", variable=display_settings['show_fib_ext'],
+                command=apply_display_settings).pack(anchor="w", padx=20)
+
+# Save Settings and Fetch button
+def save_and_fetch():
+    """Save display settings and fetch charts again"""
+    apply_display_settings()
+    fetch_and_analyze()
+
+save_fetch_frame = ttk.Frame(settings_scrollable_frame, padding="10")
+save_fetch_frame.pack(fill=tk.X, pady=20)
+
+ttk.Button(save_fetch_frame, text="Save Settings & Fetch Charts", command=save_and_fetch,
+           style="Accent.TButton").pack(fill=tk.X, pady=5)
 
 # Bottom frame for close button
 bottom_frame = ttk.Frame(root, padding="5")
